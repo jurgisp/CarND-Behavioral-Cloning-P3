@@ -1,125 +1,110 @@
-# Behaviorial Cloning Project
+# **Behavioral Cloning - Project Writeup** 
 
-[![Udacity - Self-Driving Car NanoDegree](https://s3.amazonaws.com/udacity-sdc/github/shield-carnd.svg)](http://www.udacity.com/drive)
+## Project goals
 
-Overview
----
-This repository contains starting files for the Behavioral Cloning Project.
-
-In this project, you will use what you've learned about deep neural networks and convolutional neural networks to clone driving behavior. You will train, validate and test a model using Keras. The model will output a steering angle to an autonomous vehicle.
-
-We have provided a simulator where you can steer a car around a track for data collection. You'll use image data and steering angles to train a neural network and then use this model to drive the car autonomously around the track.
-
-We also want you to create a detailed writeup of the project. Check out the [writeup template](https://github.com/udacity/CarND-Behavioral-Cloning-P3/blob/master/writeup_template.md) for this project and use it as a starting point for creating your own writeup. The writeup can be either a markdown file or a pdf document.
-
-To meet specifications, the project will require submitting five files: 
-* model.py (script used to create and train the model)
-* drive.py (script to drive the car - feel free to modify this file)
-* model.h5 (a trained Keras model)
-* a report writeup file (either markdown or pdf)
-* video.mp4 (a video recording of your vehicle driving autonomously around the track for at least one full lap)
-
-This README file describes how to output the video in the "Details About Files In This Directory" section.
-
-Creating a Great Writeup
----
-A great writeup should include the [rubric points](https://review.udacity.com/#!/rubrics/432/view) as well as your description of how you addressed each point.  You should include a detailed description of the code used (with line-number references and code snippets where necessary), and links to other supporting documents or external references.  You should include images in your writeup to demonstrate how your code works with examples.  
-
-All that said, please be concise!  We're not looking for you to write a book here, just a brief description of how you passed each rubric point, and references to the relevant code :). 
-
-You're not required to use markdown for your writeup.  If you use another method please just submit a pdf of your writeup.
-
-The Project
----
 The goals / steps of this project are the following:
-* Use the simulator to collect data of good driving behavior 
-* Design, train and validate a model that predicts a steering angle from image data
-* Use the model to drive the vehicle autonomously around the first track in the simulator. The vehicle should remain on the road for an entire loop around the track.
+* Use the simulator to collect data of good driving behavior
+* Build, a convolution neural network in Keras that predicts steering angles from images
+* Train and validate the model with a training and validation set
+* Test that the model successfully drives around track one without leaving the road
 * Summarize the results with a written report
 
-### Dependencies
-This lab requires:
+## Main results
 
-* [CarND Term1 Starter Kit](https://github.com/udacity/CarND-Term1-Starter-Kit)
+The car learned to successfully drive around the first track at 15mph using [MobileNet](https://arxiv.org/pdf/1704.04861.pdf) architecture!
 
-The lab enviroment can be created with CarND Term1 Starter Kit. Click [here](https://github.com/udacity/CarND-Term1-Starter-Kit/blob/master/README.md) for the details.
+[![first-track-test-video](https://img.youtube.com/vi/EbwU391KmlQ/0.jpg)](https://www.youtube.com/watch?v=EbwU391KmlQ)
 
-The following resources can be found in this github repository:
-* drive.py
-* video.py
-* writeup_template.md
+My project includes the following files:
 
-The simulator can be downloaded from the classroom. In the classroom, we have also provided sample data that you can optionally use to help train your model.
+* [model.py](model.py) containing the script to create and train the model. Generator wasn't used because there was enough RAM to fit the training data (~10GB).
+* [drive.py](drive.py) for driving the car in autonomous mode
+* [model.h5](model.h5) containing a trained MobileNet convolution neural network 
+* [video.mp4](video.mp4) containing test video as recorded by `drive.py`
 
-## Details About Files In This Directory
-
-### `drive.py`
-
-Usage of `drive.py` requires you have saved the trained model as an h5 file, i.e. `model.h5`. See the [Keras documentation](https://keras.io/getting-started/faq/#how-can-i-save-a-keras-model) for how to create this file using the following command:
+The car can be driven autonomously around the track by executing 
 ```sh
-model.save(filepath)
+python drive.py model.h5 15
 ```
 
-Once the model has been saved, it can be used with drive.py using this command:
+## Data preparation
 
-```sh
-python drive.py model.h5
+The critical part of this project was to prepare appropriate training data by driving manually in the simulator and then pre-processing it. Since the "test data" is ultimately generated by the autonomous driving of the model itself, it is quite a challenge to make the training data a "representative sample" of the test data. For example, if the model veers of the road while driving, and it has never seen off-road training data, then there is no way for it to know what to do.
+
+### Driving the simulator
+
+I genereted the training data for the model by driving 3 laps very carefully following the center of the road at low speed. I used mouse for fine-grained steering, so as to generate smooth steering angles.
+
+I fully expected to need more training data, recording how the car should recover from dangerous positions, but, surprisingly, the model learned to drive even without that! I suspect the data from left and right cameras was enough of a substitute.
+
+### Validation
+
+I split the data into:
+
+* 2 laps for training data
+* 1 lap for validation data
+* No testing data, since the test is how well it actually drives, which is impossible to replicate with a dataset.
+
+Note that I didn't select validation data by random sampling from all 3 laps, because that would yield closely time-correlated data samples, and wouldn't actually help overfitting.
+
+### Pre-processing
+
+Given the 2 laps of training data, following data preparation steps were performed:
+
+* The images were cropped 60 pixels from above to remove the scenery which might lead to overfitting
+* The images were cropped 30 pixels from below to remove the car model
+* Flipped images were generated with flipped steering angles
+* Left and right camera images were added with 0.1 steering correction. This compensates for the lack of driving data where car recovers from driving to the left or to the right of the center.
+
+Only cropping was applied to the validation data. Here are examples of the cropped images:
+
+![processed1](writeup_images/processed1.png)
+![processed2](writeup_images/processed2.png)
+![processed3](writeup_images/processed3.png)
+
+In the end the data consisted of:
+
+* 41892 training images (6982 frames, generated x6)
+* 3695 validation images
+
+## Training the model
+
+### Architecture
+
+#### LeNet & Nvidia
+
+I first tried [LeNet](https://github.com/jurgisp/CarND-Traffic-Sign-Classifier-Project#model-architecture) architecture and [Nvidia](https://devblogs.nvidia.com/deep-learning-self-driving-cars/) architecture - both performed OK, but didn't drive the full lap - they would leave the track onto the dirt road. Understandably, that's a tricky place - the side of the road is not as clearly distinguished.
+
+![dirtroad](writeup_images/dirtroad.jpg)
+
+#### MobileNet
+
+Then I decided to try a more complex architecture. I didn't feel like taking up the challenge and desigining it myself, since people spent years doing that already. In the spirit of transfer learning that we saw in the lectures, I looked at the [available network architectures in Keras](https://keras.io/applications/#documentation-for-individual-models). Since we needed a fast and small network, to be able to classify many frames per second, I picked [MobileNet](https://arxiv.org/pdf/1704.04861.pdf). 
+
+### Training
+
+I didn't use pre-trained weights of MobileNet from ImageNet for two reasons: it's trained on 224x224 images while we have 70x320, and the images are actually very different.
+
+So I trained MobileNet (with top layer replaced) from randomly initialized weights over 10 epochs using Adam optimizer. It took about 50 minutes on an AWS `p2.xlarge` instance (NVIDIA K80 GPU). Here is the training log:
+
 ```
+Train on 41892 samples, validate on 3695 samples
+Epoch 1 - 299s - loss: 0.0257 - val_loss: 0.0086
+Epoch 2 - 294s - loss: 0.0039 - val_loss: 0.0102
+Epoch 3 - 294s - loss: 0.0025 - val_loss: 0.0136
+Epoch 4 - 294s - loss: 0.0019 - val_loss: 0.0044
+Epoch 5 - 294s - loss: 0.0016 - val_loss: 0.0064
+Epoch 6 - 294s - loss: 0.0014 - val_loss: 0.0061
+Epoch 7 - 294s - loss: 0.0012 - val_loss: 0.0027
+Epoch 8 - 293s - loss: 0.0011 - val_loss: 0.0085
+Epoch 9 - 294s - loss: 0.0013 - val_loss: 0.0015
+Epoch 10 - 294s - loss: 9.9142e-04 - val_loss: 0.0016
+ ```
 
-The above command will load the trained model and use the model to make predictions on individual images in real-time and send the predicted angle back to the server via a websocket connection.
+ We can see from validation loss, that the model doesn't overfit.
 
-Note: There is known local system's setting issue with replacing "," with "." when using drive.py. When this happens it can make predicted steering values clipped to max/min values. If this occurs, a known fix for this is to add "export LANG=en_US.utf8" to the bashrc file.
+## Autonomous driving
 
-#### Saving a video of the autonomous agent
+And it worked!!! The MobileNet model drove the whole lap! At first I ran with 9mph speed as was initially hardcoded, but then I increased it to 15mph, and it was still good. 
 
-```sh
-python drive.py model.h5 run1
-```
-
-The fourth argument, `run1`, is the directory in which to save the images seen by the agent. If the directory already exists, it'll be overwritten.
-
-```sh
-ls run1
-
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_424.jpg
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_451.jpg
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_477.jpg
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_528.jpg
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_573.jpg
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_618.jpg
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_697.jpg
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_723.jpg
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_749.jpg
-[2017-01-09 16:10:23 EST]  12KiB 2017_01_09_21_10_23_817.jpg
-...
-```
-
-The image file name is a timestamp of when the image was seen. This information is used by `video.py` to create a chronological video of the agent driving.
-
-### `video.py`
-
-```sh
-python video.py run1
-```
-
-Creates a video based on images found in the `run1` directory. The name of the video will be the name of the directory followed by `'.mp4'`, so, in this case the video will be `run1.mp4`.
-
-Optionally, one can specify the FPS (frames per second) of the video:
-
-```sh
-python video.py run1 --fps 48
-```
-
-Will run the video at 48 FPS. The default FPS is 60.
-
-#### Why create a video
-
-1. It's been noted the simulator might perform differently based on the hardware. So if your model drives succesfully on your machine it might not on another machine (your reviewer). Saving a video is a solid backup in case this happens.
-2. You could slightly alter the code in `drive.py` and/or `video.py` to create a video of what your model sees after the image is processed (may be helpful for debugging).
-
-### Tips
-- Please keep in mind that training images are loaded in BGR colorspace using cv2 while drive.py load images in RGB to predict the steering angles.
-
-## How to write a README
-A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
-
+A note on performance of the network: when I tried to run `drive.py` on my laptop without a GPU, MobileNet prediction would take ~100ms per frame, which was actually too slow for driving. I then set it up to run on the same AWS instance with a GPU, which could do prediction in <10ms, which was fast enough.
