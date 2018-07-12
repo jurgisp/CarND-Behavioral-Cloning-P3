@@ -1,6 +1,7 @@
 import argparse
 import base64
 from datetime import datetime
+import time
 import os
 import shutil
 
@@ -15,6 +16,9 @@ from io import BytesIO
 from keras.models import load_model
 import h5py
 from keras import __version__ as keras_version
+import tensorflow as tf
+from keras.applications import imagenet_utils
+import keras.applications.mobilenet as mobilenet
 
 sio = socketio.Server()
 app = Flask(__name__)
@@ -44,13 +48,12 @@ class SimplePIController:
 
 
 controller = SimplePIController(0.1, 0.002)
-set_speed = 9
-controller.set_desired(set_speed)
 
 
 @sio.on('telemetry')
 def telemetry(sid, data):
     if data:
+        t = time.time()
         # The current steering angle of the car
         steering_angle = data["steering_angle"]
         # The current throttle of the car
@@ -65,7 +68,11 @@ def telemetry(sid, data):
 
         throttle = controller.update(float(speed))
 
-        print(steering_angle, throttle)
+        print('{:%H:%M:%S.%f}: time={:.0f}ms angle={:.3f} throttle={:.3f}'.format(
+            datetime.now(),
+            (time.time() - t)*1000,
+            steering_angle, 
+            throttle))
         send_control(steering_angle, throttle)
 
         # save frame
@@ -102,6 +109,11 @@ if __name__ == '__main__':
         help='Path to model h5 file. Model should be on the same path.'
     )
     parser.add_argument(
+        'speed',
+        type=int,
+        help='Path to model h5 file. Model should be on the same path.'
+    )
+    parser.add_argument(
         'image_folder',
         type=str,
         nargs='?',
@@ -109,6 +121,8 @@ if __name__ == '__main__':
         help='Path to image folder. This is where the images from the run will be saved.'
     )
     args = parser.parse_args()
+
+    controller.set_desired(args.speed)
 
     # check that model Keras version is same as local Keras version
     f = h5py.File(args.model, mode='r')
@@ -119,7 +133,12 @@ if __name__ == '__main__':
         print('You are using Keras version ', keras_version,
               ', but the model was built using ', model_version)
 
-    model = load_model(args.model)
+    print('Loading model...')
+    model = load_model(args.model, custom_objects={
+        'imagenet_utils': imagenet_utils,
+        'relu6': mobilenet.relu6
+        })
+    print('Model loaded')
 
     if args.image_folder != '':
         print("Creating image folder at {}".format(args.image_folder))
